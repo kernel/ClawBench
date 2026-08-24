@@ -280,7 +280,7 @@ name = "{STEP_NAME}"
 timeout_sec = {float(timeout_sec):.1f}
 
 [steps.verifier]
-timeout_sec = 180.0
+timeout_sec = 300.0
 
 [steps.healthcheck]
 command = "{healthcheck_command}"
