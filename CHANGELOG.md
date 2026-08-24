@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 ### Added
 - Added Kernel as a managed remote browser runtime with live view and downloaded replay recordings. Thanks to @[rgarcia](https://github.com/rgarcia).
+- Added a `--browser-runtime kernel` mode to the Harbor adapter that runs each task against one Kernel cloud browser, exposing only a credential-free CDP bridge to the agent, and finalizes the replay and deletes the browser during verification.
 
 ## [0.9.2] - 2026-08-18
 ### Added
