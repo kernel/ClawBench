@@ -17,11 +17,11 @@ from typing import Any
 from clawbench.runner.run_support.config import (
     BASE_IMAGE,
     DEFAULT_HARNESS,
-    ENGINE,
     HARNESSES,
     IMAGE,
     WORKSPACE_ROOT,
     ModelConfigError,
+    engine,
     harness_image,
     load_model_config,
     load_runtime_env,
@@ -71,7 +71,6 @@ from clawbench.utils.paths import SHARED_ROOT, ensure_workspace_templates
 __all__ = [
     "BASE_IMAGE",
     "DEFAULT_HARNESS",
-    "ENGINE",
     "HARNESSES",
     "IMAGE",
     "docker_build",
@@ -167,6 +166,10 @@ def main():
 
     if not args.human and args.model is None:
         parser.error("model is required for agent mode (or use --human)")
+
+    # Even --no-build needs a container; reject missing engines before allocating
+    # email or browser resources. Keep this after parsing so --help remains usable.
+    engine()
 
     # Load infrastructure config. Process environment has final precedence.
     env = load_runtime_env()
@@ -512,7 +515,7 @@ def main():
             def handle_sigint(sig, frame):
                 print("\nCtrl+C received, stopping container gracefully...")
                 subprocess.run(
-                    [ENGINE, "stop", "-t", "20", container], capture_output=True
+                    [engine(), "stop", "-t", "20", container], capture_output=True
                 )
 
             signal.signal(signal.SIGINT, handle_sigint)
