@@ -26,9 +26,6 @@ Usage:
         --run-id batch-20260902-140000 \\
         --started-at 2026-09-02T14:00:00Z
 
-    # or, via the wrapper:
-    scripts/export_openeval.sh <batch_dir>
-
 <batch_dir> is a directory containing rescore-summary.json (written by
 `clawbench-rescore` / scripts/rescore.sh) and the run-meta.json files it
 was rolled up from. Writes <batch_dir>/resultset.json by default; pass
