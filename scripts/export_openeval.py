@@ -22,7 +22,7 @@ read next to output from any other EvalPort-aware benchmark.
 
 Usage:
 
-    python scripts/export_openeval.py <batch_dir> \\
+    uv run python scripts/export_openeval.py <batch_dir> \\
         --run-id batch-20260902-140000 \\
         --started-at 2026-09-02T14:00:00Z
 
