@@ -87,7 +87,7 @@ def discover_models(patterns: list[str] | None, all_models: bool) -> list[str]:
 
 
 def _case_id(d: Path) -> int | None:
-    """Extract the numeric task ID from V1/V2/flat Claw-Eval case names."""
+    """Extract the numeric task ID from V1/V2/Claw-Eval case names."""
     match = re.match(r"^(?:v\d+-|ce-)?[A-Za-z]?(\d+)", d.stem)
     if not match:
         return None
@@ -173,16 +173,8 @@ async def stop_wedged_job(
     return b"", True
 
 
-def _flat_case_files(base: Path) -> list[Path]:
-    return [
-        p
-        for p in base.glob("*.json")
-        if p.is_file() and p.name not in {"eligibility-report.json"}
-    ]
-
-
 def _all_cases_in(base: Path) -> list[Path]:
-    return [p.parent for p in base.glob("*/task.json")] + _flat_case_files(base)
+    return [p.parent for p in base.glob("*/task.json")]
 
 
 def discover_cases(
@@ -207,8 +199,6 @@ def discover_cases(
                 expanded.extend(base.glob(pat))
             for d in expanded:
                 if d.is_dir() and (d / "task.json").exists():
-                    dirs.append(d)
-                elif d.is_file() and d.suffix == ".json":
                     dirs.append(d)
     elif case_range:
         dirs = sorted(_all_cases_in(base), key=_case_sort_key)
@@ -429,6 +419,11 @@ async def run_job(
                     job.status = "passed"
                 elif proc.returncode == 1:
                     job.status = "failed"
+                elif proc.returncode == 3:
+                    # run.py's own signal for "judge never rendered a verdict":
+                    # kept out of "failed" so a judge outage cannot masquerade
+                    # as the agent having failed the task.
+                    job.status = "judge_inconclusive"
                 else:
                     job.status = "error"
             except asyncio.CancelledError:
@@ -465,7 +460,7 @@ async def run_job(
         # Task cancelled while waiting on semaphore, throttle wait, or
         # before subprocess was created.  "running" can appear here if
         # CancelledError hit after status was set but before proc started.
-        if job.status not in ("passed", "failed", "error"):
+        if job.status not in ("passed", "failed", "error", "judge_inconclusive"):
             job.status = "skipped"
         raise
 
@@ -475,10 +470,12 @@ def print_progress(jobs: list[Job], start: float) -> None:
     running = sum(1 for j in jobs if j.status == "running")
     passed = sum(1 for j in jobs if j.status == "passed")
     failed = sum(1 for j in jobs if j.status in ("failed", "error"))
+    inconclusive = sum(1 for j in jobs if j.status == "judge_inconclusive")
     elapsed = fmt_duration(time.monotonic() - start)
     print(
         f"[{ts()}] [BATCH] {done}/{len(jobs)} done | {running} running | "
-        f"{passed} passed, {failed} failed | {elapsed} elapsed",
+        f"{passed} passed, {failed} failed, {inconclusive} judge-inconclusive | "
+        f"{elapsed} elapsed",
         file=sys.stderr,
     )
 
@@ -514,7 +511,7 @@ def print_summary(
         totals[j.status] = totals.get(j.status, 0) + 1
     parts = [
         f"{totals.get(s, 0)} {s}"
-        for s in ("passed", "failed", "error", "skipped")
+        for s in ("passed", "failed", "error", "judge_inconclusive", "skipped")
         if totals.get(s)
     ]
     print(f"\nTotal: {len(jobs)} jobs | {' | '.join(parts)}")
@@ -679,7 +676,7 @@ def write_summary_json(
         ],
         "totals": {
             s: sum(1 for j in jobs if j.status == s)
-            for s in ("passed", "failed", "error", "skipped")
+            for s in ("passed", "failed", "error", "judge_inconclusive", "skipped")
         },
     }
     (base_output / "batch-summary.json").write_text(json.dumps(data, indent=2))
