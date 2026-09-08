@@ -8,7 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 ### Added
-- Added `scripts/export_openeval.py` (+ `scripts/export_openeval.sh` wrapper), an optional/additive script exporting a batch's `rescore-summary.json` as an [EvalPort](https://github.com/adhabnr-ux/evalport) `ResultSet` (see #322).
+- Added `scripts/export_openeval.py`, an additive script exporting a batch's `rescore-summary.json` as an [EvalPort](https://github.com/adhabnr-ux/evalport) `ResultSet`.
+-
+### Changed
+- The `claw-eval` port now uses the same `test-cases/<suite>/<task-identifier>/task.json` layout as the native corpora, instead of flat `<task-identifier>.json` files. Case discovery in `clawbench-batch` and the TUI is a plain `*/task.json` search again, and the `validate-task` workflow covers the suite without special-casing.
+- Changed the default Harbor version to `0.22.0`.
+
+### Fixed
+- Fixed a judge-provider outage (or an unparseable judge reply) being recorded as an agent failure. `run.py` now exits 3 instead of 1 when the judge never renders a verdict, `batch.py` gives it its own `judge_inconclusive` bucket in `batch-summary.json` instead of folding it into `failed`, and `clawbench-rescore` now retries a cached `match: null` verdict even without `--force`.
 
 ## [0.10.0] - 2026-08-30
 ### Added
