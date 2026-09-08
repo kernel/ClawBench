@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Changed the default Harbor version to `0.22.0`.
 
 ### Fixed
+- Added host-side container and batch-job timeouts so a wedged run cannot stall a batch indefinitely.
 - Fixed a judge-provider outage (or an unparseable judge reply) being recorded as an agent failure. `run.py` now exits 3 instead of 1 when the judge never renders a verdict, `batch.py` gives it its own `judge_inconclusive` bucket in `batch-summary.json` instead of folding it into `failed`, and `clawbench-rescore` now retries a cached `match: null` verdict even without `--force`.
 - Fail task setup when PurelyMail returns an API error instead of emitting credentials for an account that was not created.
 
