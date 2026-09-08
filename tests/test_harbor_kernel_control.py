@@ -14,6 +14,7 @@ import pytest
 from clawbench.eval.harbor_adapter import (
     PLAYWRIGHT_MCP_PACKAGE,
     PLAYWRIGHT_MCP_VERSION,
+    harbor_instruction,
     main as adapt_main,
     write_harbor_task,
 )
@@ -82,8 +83,8 @@ def test_kernel_runtime_selection_writes_bridge_env_and_pinned_mcp(
     assert config["metadata"]["browser_runtime"] == "kernel"
     env = config["environment"]["env"]
     assert env["CLAWBENCH_HARBOR_BROWSER_RUNTIME"] == "kernel"
-    assert env["PLAYWRIGHT_CDP_URL"] == "http://127.0.0.1:7878"
-    assert env["CLAWBENCH_CDP_URL"] == "http://127.0.0.1:7878"
+    assert env["PLAYWRIGHT_CDP_URL"] == "http://127.0.0.1:9223"
+    assert env["CLAWBENCH_CDP_URL"] == "http://127.0.0.1:9223"
     assert env["CLAWBENCH_RECORDING_MODE"] == "provider-download"
     assert env["KERNEL_API_KEY"] == "${KERNEL_API_KEY}"
 
@@ -97,10 +98,10 @@ def test_kernel_runtime_selection_writes_bridge_env_and_pinned_mcp(
     # Pinned package so the control arm is reproducible.
     assert server["args"][1] == f"{PLAYWRIGHT_MCP_PACKAGE}@{PLAYWRIGHT_MCP_VERSION}"
     assert "--cdp-endpoint" in server["args"]
-    assert "http://127.0.0.1:7878" in server["args"]
+    assert "http://127.0.0.1:9223" in server["args"]
 
     healthcheck = config["steps"][0]["healthcheck"]["command"]
-    assert "7878/json/version" in healthcheck
+    assert "9223/json/version" in healthcheck
 
 
 def test_kernel_setup_and_test_scripts_wire_lifecycle(
@@ -114,7 +115,7 @@ def test_kernel_setup_and_test_scripts_wire_lifecycle(
     assert "export CLAWBENCH_BROWSER_CDP_URL_FILE=" in setup
     assert "trap cleanup_browser EXIT" in setup
     assert "kernel-browser.py cleanup" in setup
-    assert "127.0.0.1:7878/json/version" in setup
+    assert "127.0.0.1:9223/json/version" in setup
 
     test = (tests / "test.sh").read_text()
     assert "kernel-browser.py finalize" in test
@@ -122,6 +123,15 @@ def test_kernel_setup_and_test_scripts_wire_lifecycle(
     env_dir = adapted_kernel_task / "environment"
     assert (env_dir / "harbor" / "kernel-browser.py").is_file()
     assert (env_dir / "harbor" / "browser_runtime_providers.py").is_file()
+
+
+def test_local_xvfb_starts_before_runtime_server() -> None:
+    script = (
+        REPO_ROOT / "src" / "clawbench" / "runtime" / "harbor" / "start-runtime.sh"
+    ).read_text()
+
+    assert script.index('Xvfb "$DISPLAY"') < script.index("uv run --no-sync uvicorn")
+    assert "socat TCP-LISTEN:9223" in script
 
 
 def test_local_runtime_default_has_no_kernel_hooks(tmp_path: Path) -> None:
@@ -148,21 +158,20 @@ def test_local_runtime_default_has_no_kernel_hooks(tmp_path: Path) -> None:
     assert (out / "environment" / "harbor" / "browser_runtime_providers.py").is_file()
 
 
-def test_instruction_ports_native_restrictions(adapted_kernel_task: Path) -> None:
+def test_kernel_runtime_preserves_existing_harbor_prompt(
+    adapted_kernel_task: Path,
+) -> None:
     instruction = (adapted_kernel_task / "steps" / "run" / "instruction.md").read_text()
-    # Native ClawBench prompt text (source of truth) survives verbatim.
+
+    assert instruction == harbor_instruction(_task())
     assert "entirely through the browser" in instruction
     assert "Do NOT use command-line tools, scripts, or direct API/SMTP calls" in (
         instruction
     )
-    # Ported harness restrictions.
-    assert "Time limit: 30 minutes" in instruction
-    assert "Playwright MCP browser tools" in instruction
-    assert "Do NOT make direct HTTP/network requests" in instruction
-    assert "Submit through the browser" in instruction
-    assert "Stop after submission" in instruction
-    # Credential-free bridge endpoint, never a provider URL.
-    assert "http://127.0.0.1:7878" in instruction
+    assert "existing Chromium session" in instruction
+    assert "CDP endpoint: http://127.0.0.1:9223" in instruction
+    assert "noVNC viewer, if needed: http://127.0.0.1:6080/vnc.html" in instruction
+    assert "Task constraints" not in instruction
     assert "ws://" not in instruction
 
 

@@ -21,10 +21,10 @@ from clawbench.utils.paths import RUNTIME_ROOT, asset_path
 DEFAULT_CASES_DIR = asset_path("test-cases", "v2")
 STEP_NAME = "run"
 HARBOR_BROWSER_RUNTIMES = ("local", "kernel")
-# Remote browser runtimes connect through the runtime server's local,
-# credential-free CDP bridge instead of a container-local Chromium.
-REMOTE_BRIDGE_CDP_URL = "http://127.0.0.1:7878"
 LOCAL_CDP_URL = "http://127.0.0.1:9223"
+# Remote browser runtimes expose the runtime server's credential-free CDP
+# bridge at the same local endpoint used by container-local Chromium.
+REMOTE_BRIDGE_CDP_URL = LOCAL_CDP_URL
 # Pinned Playwright MCP package Harbor's stock Claude Code and Codex agents
 # use to drive the ClawBench browser through the CDP bridge.
 PLAYWRIGHT_MCP_PACKAGE = "@playwright/mcp"
@@ -161,41 +161,18 @@ def mcp_servers_toml(servers: list[dict[str, Any]]) -> str:
     return "\n" + "\n".join(blocks)
 
 
-def harbor_instruction(task: dict[str, Any], *, browser_runtime: str = "local") -> str:
+def harbor_instruction(task: dict[str, Any]) -> str:
     instruction = build_instruction(task)
-    cdp_url = REMOTE_BRIDGE_CDP_URL if browser_runtime == "kernel" else LOCAL_CDP_URL
-    runtime_section = (
+    return (
+        instruction + "\n\n---\n"
         "Harbor browser runtime:\n"
-        "- Use the existing browser session exposed by Chrome DevTools Protocol.\n"
-        f"- CDP endpoint: {cdp_url}\n"
+        "- Use the existing Chromium session exposed by Chrome DevTools Protocol.\n"
+        "- CDP endpoint: http://127.0.0.1:9223\n"
         "- CDP environment variables are also set for the agent process: "
         "CLAWBENCH_CDP_URL, BROWSER_CDP_URL, CDP_URL, CHROME_CDP_URL, and PLAYWRIGHT_CDP_URL.\n"
-    )
-    if browser_runtime == "local":
-        runtime_section += "- noVNC viewer, if needed: http://127.0.0.1:6080/vnc.html\n"
-    restrictions = (
-        "Task constraints (matching the native ClawBench harness rules):\n"
-        f"- Time limit: {task.get('time_limit')} minutes. The harness stops the "
-        "run when the limit elapses, so finish and submit before then.\n"
-        "- Complete the task entirely in the browser; do not launch or use any "
-        "other browser.\n"
-        "- Use only Playwright MCP browser tools plus reading files under "
-        "./my-info/ to accomplish the task.\n"
-        "- Do NOT make direct HTTP/network requests for task completion via shell "
-        "tools, scripts, API calls, or SMTP — every task action must go through "
-        "the browser.\n"
-        "- Submit through the browser: perform the task's final submission action "
-        "in the browser so the request happens on the page.\n"
-        "- Stop after submission: once the final action is submitted, stop and do "
-        "not start other work.\n"
-    )
-    return (
-        instruction
-        + "\n\n---\n"
-        + runtime_section
-        + "- Do not launch a separate browser. Complete the task through the existing browser session.\n"
-        + "---\n\n"
-        + restrictions
+        "- noVNC viewer, if needed: http://127.0.0.1:6080/vnc.html\n"
+        "- Do not launch a separate browser. Complete the task through the existing browser session.\n"
+        "---\n"
     )
 
 
@@ -303,7 +280,7 @@ def setup_script(browser_runtime: str = "local") -> str:
     if browser_runtime == "kernel":
         readiness = (
             "  if curl -sf http://127.0.0.1:7878/api/status >/dev/null \\\n"
-            "    && curl -sf http://127.0.0.1:7878/json/version >/dev/null; then\n"
+            "    && curl -sf http://127.0.0.1:9223/json/version >/dev/null; then\n"
         )
         kernel_setup = (
             "# Create the Kernel browser and replay before the runtime server"
@@ -435,9 +412,7 @@ def write_harbor_task(
             browser_runtime_options=browser_runtime_options,
         )
     )
-    (step_dir / "instruction.md").write_text(
-        harbor_instruction(task, browser_runtime=browser_runtime)
-    )
+    (step_dir / "instruction.md").write_text(harbor_instruction(task))
     (workdir / "eval-schema.json").write_text(json.dumps(task["eval_schema"], indent=2))
     (workdir / "task.json").write_text(json.dumps(task, indent=2, ensure_ascii=False))
     copy_extra_info(task, task_dir, workdir / "extra_info")
