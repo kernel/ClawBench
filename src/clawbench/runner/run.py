@@ -167,6 +167,10 @@ def main():
     if not args.human and args.model is None:
         parser.error("model is required for agent mode (or use --human)")
 
+    # Even --no-build needs a container; reject missing engines before allocating
+    # email or browser resources. Keep this after parsing so --help remains usable.
+    engine()
+
     # Load infrastructure config. Process environment has final precedence.
     env = load_runtime_env()
     infra_required = ["PURELY_MAIL_API_KEY", "PURELY_MAIL_DOMAIN"]
